@@ -3,11 +3,13 @@ package dox
 import (
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 	"strings"
 
+	"github.com/irfn/go-confluence"
 	"github.com/jesselang/dox/internal/source"
-	"github.com/jesselang/go-confluence"
 	"github.com/spf13/viper"
 )
 
@@ -49,6 +51,9 @@ func getConfigVars() error {
 func Publish(files []string, repoRoot string, verbose bool, dryRun bool) error {
 	err := getConfigVars()
 	if err != nil {
+		if verbose {
+			log.Println("Error getting config vars")
+		}
 		return err
 	}
 
@@ -60,7 +65,16 @@ func Publish(files []string, repoRoot string, verbose bool, dryRun bool) error {
 		),
 	)
 	if err != nil {
+		if verbose {
+			log.Println("Error with Wiki initialisation")
+		}
 		return err
+	}
+	if verbose {
+		client := &http.Client{
+			Transport: &DebugTransport{},
+		}
+		wiki.SetClient(client)
 	}
 
 	// make sources out of each file
@@ -72,6 +86,9 @@ func Publish(files []string, repoRoot string, verbose bool, dryRun bool) error {
 			DoxNoticeFileUrl: fileBrowseUrl(browseUrlBase, repoRoot, file),
 		})
 		if err != nil {
+			if verbose {
+				log.Println("Error with file definition", file)
+			}
 			return err
 		}
 		if src.Ignore() {
@@ -83,6 +100,9 @@ func Publish(files []string, repoRoot string, verbose bool, dryRun bool) error {
 	// try to find root page
 	rootPageSrc, err := getRootPageSrc(sources)
 	if err != nil {
+		if verbose {
+			log.Println("Error with root confluence page", sources)
+		}
 		return err
 	}
 
@@ -90,6 +110,9 @@ func Publish(files []string, repoRoot string, verbose bool, dryRun bool) error {
 		// create dox default root page
 		rootPageSrc, err = source.New("", source.Opts{})
 		if err != nil {
+			if verbose {
+				log.Println("Error creating default root page", source.Opts{})
+			}
 			return err
 		}
 		sources = append(sources, rootPageSrc)
@@ -98,17 +121,23 @@ func Publish(files []string, repoRoot string, verbose bool, dryRun bool) error {
 	// createStub only, we require root page's ID
 	rootID, err := createStub(wiki, rootPageSrc, "", dryRun)
 	if err != nil {
+		if verbose {
+			log.Println("Error creating stub root page", err.Error())
+		}
 		return err
 	}
 
 	// TODO: this prints even if we did not stub the page
 	if verbose {
-		fmt.Printf("root page stubbed to %s\n", rootID)
+		fmt.Printf("root page stub created to have rootID to %s\n", rootID)
 	}
 
 	for _, src := range sources {
 		_, err := createStub(wiki, src, rootID, dryRun)
 		if err != nil {
+			if verbose {
+				log.Println("Error creating page under root", src, rootID)
+			}
 			return err
 		}
 	}

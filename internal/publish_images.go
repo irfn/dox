@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jesselang/go-confluence"
+	"github.com/irfn/go-confluence"
 	"golang.org/x/net/html"
 )
 

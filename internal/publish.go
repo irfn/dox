@@ -213,17 +213,23 @@ func updateContent(wiki *confluence.Wiki, src source.Source, repoRoot string, dr
 	}
 
 	sourceOutput := src.Output()
+	jarPath := "/Users/irfan.shah/dev/etc/plantuml-asl-1.2023.10.jar"
 
 	imageSrcFiles, err := getImageSrcFiles(sourceOutput, src.File())
 	if err != nil {
 		return "", err
 	}
 
-	pageContent, err := replaceImagesWithAttachments(imageSrcFiles, src.File(), sourceOutput, c.ID, wiki, uri)
+	generatedContent, err := generatePlantImageSrcFilesAndReplaceContent(sourceOutput, src.File(), repoRoot, jarPath)
 	if err != nil {
 		return "", err
 	}
-
+	imageSrcFiles = append(imageSrcFiles, generatedContent.UMLSrcFiles...)
+	pageContent, err := replaceImagesWithAttachments(imageSrcFiles, src.File(), generatedContent.UpdatedContent, c.ID, wiki, uri)
+	if err != nil {
+		return "", err
+	}
+	fmt.Println(generatedContent.UpdatedContent)
 	pageContent, err = replaceRelativeLinks(src.File(), pageContent, uri, browseUrlBase, repoRoot)
 	if err != nil {
 		return "", err

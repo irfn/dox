@@ -3,8 +3,9 @@ package dox
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,11 +81,14 @@ func getUMLBlocksFromHTML(content string) (string, map[string]string, error) {
 			h := sha256.New()
 			umlContent := htmlquery.InnerText(code)
 			h.Write([]byte(umlContent))
-			fileNameOptions := filenamify.Options{Replacement: "-", MaxLength: 20}
-			id, err := filenamify.Filenamify(base64.RawStdEncoding.EncodeToString(h.Sum(nil)), fileNameOptions)
+			fileNameOptions := filenamify.Options{Replacement: "-", MaxLength: 30}
+			encodedStr := hex.EncodeToString(h.Sum(nil))
+
+			uniqueid, err := filenamify.Filenamify(encodedStr, fileNameOptions)
 			if err != nil {
 				return content, nil, err
 			}
+			id := url.QueryEscape(uniqueid)
 			code.Attr = append(code.Attr, html.Attribute{Key: "id", Val: id})
 			umlBlocks[id] = umlContent
 		}

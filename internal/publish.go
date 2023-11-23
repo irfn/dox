@@ -18,6 +18,8 @@ var space string
 var browseUrlBase string
 var username string
 var password string
+var token string
+var plantumlJarPath string
 
 func getConfigVars() error {
 	uri = viper.GetString("uri")
@@ -41,10 +43,18 @@ func getConfigVars() error {
 	}
 
 	password = os.Getenv("DOX_PASSWORD")
-	if len(password) == 0 {
-		return errors.New("DOX_PASSWORD must be set")
+	token = os.Getenv("DOX_TOKEN")
+	if len(password) == 0 && len(token) == 0 {
+		//lint:ignore ST1005
+		return errors.New("Either DOX_PASSWORD or DOX_TOKEN must be set")
 	}
 
+	browseUrlBase = viper.GetString("browse_url_base")
+	if len(browseUrlBase) == 0 {
+		return errors.New("browse_url_base must be set in config")
+	}
+
+	plantumlJarPath = viper.GetString("plantuml_jar_path")
 	return nil
 }
 
@@ -57,13 +67,18 @@ func Publish(files []string, repoRoot string, verbose bool, dryRun bool) error {
 		return err
 	}
 
-	wiki, err := confluence.NewWiki(
-		uri,
-		confluence.BasicAuth(
+	var auth confluence.AuthMethod
+	if len(token) > 0 {
+		auth = confluence.TokenAuth(token)
+	} else {
+		auth = confluence.BasicAuth(
 			username,
 			password,
-		),
-	)
+		)
+	}
+
+	wiki, err := confluence.NewWiki(uri, auth)
+
 	if err != nil {
 		if verbose {
 			log.Println("Error with Wiki initialisation")
@@ -213,23 +228,24 @@ func updateContent(wiki *confluence.Wiki, src source.Source, repoRoot string, dr
 	}
 
 	sourceOutput := src.Output()
-	jarPath := "/Users/irfan.shah/dev/etc/plantuml-asl-1.2023.10.jar"
 
 	imageSrcFiles, err := getImageSrcFiles(sourceOutput, src.File())
 	if err != nil {
 		return "", err
 	}
-
-	generatedContent, err := generatePlantImageSrcFilesAndReplaceContent(sourceOutput, src.File(), repoRoot, jarPath)
+	updatedContent := sourceOutput
+	if len(plantumlJarPath) > 0 {
+		generatedContent, err := generatePlantImageSrcFilesAndReplaceContent(sourceOutput, src.File(), repoRoot, plantumlJarPath)
+		if err != nil {
+			return "", err
+		}
+		imageSrcFiles = append(imageSrcFiles, generatedContent.UMLSrcFiles...)
+		updatedContent = generatedContent.UpdatedContent
+	}
+	pageContent, err := replaceImagesWithAttachments(imageSrcFiles, src.File(), updatedContent, c.ID, wiki, uri)
 	if err != nil {
 		return "", err
 	}
-	imageSrcFiles = append(imageSrcFiles, generatedContent.UMLSrcFiles...)
-	pageContent, err := replaceImagesWithAttachments(imageSrcFiles, src.File(), generatedContent.UpdatedContent, c.ID, wiki, uri)
-	if err != nil {
-		return "", err
-	}
-	fmt.Println(generatedContent.UpdatedContent)
 	pageContent, err = replaceRelativeLinks(src.File(), pageContent, uri, browseUrlBase, repoRoot)
 	if err != nil {
 		return "", err
